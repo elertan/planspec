@@ -1,7 +1,7 @@
 {
   "name": "planspec",
   "description": "Design-first development workflow: brainstorming, implementation specs, autonomous execution, code review, and security review",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": {
     "name": "elertan"
   },

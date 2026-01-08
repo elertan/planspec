@@ -30,7 +30,7 @@ Transform ideas into validated, detailed design specifications through structure
 - **YAGNI ruthlessly** - Cut unnecessary complexity from all designs
 - **Incremental validation** - Present in chunks, confirm each before continuing
 - **Be flexible** - Revisit earlier decisions when new information emerges
-- **Verify, don't assume** - Discover actual constraints before designing. If you haven't inspected it, you don't know it. Assumptions must be flagged as uncertain.
+- **Verify, don't assume** - If you haven't inspected it, you don't know it. Before stating any behavior or constraint: (1) Can you verify it? (check code, docs, test the API) → Do so. (2) Can't verify? → Explicitly say "I don't know" and ask the user, or flag as uncertain. Never fill gaps with plausible-sounding guesses. "I assume X" is a red flag—either verify X or acknowledge uncertainty.
 - **Precision over impressiveness** - State exactly what an advantage does and doesn't protect against. Vague benefits mislead decisions. "Future-proof against X" must specify what X is and acknowledge what still breaks.
 - **Assume failure** - For every operation or decision, ask: "What if this fails/goes wrong?" Don't design only the happy path. If something can fail, the design must address: (1) how we detect it, (2) whether it's recoverable, (3) what we do about it.
 
