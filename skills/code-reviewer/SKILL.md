@@ -11,19 +11,19 @@ Review implemented code for quality, correctness, and alignment with design spec
 
 At implementation checkpoints:
 ```
-/code-reviewer
+planspec:code-reviewer
 ```
 
 With specific context:
 ```
-/code-reviewer --phase 2 --impl-spec planspec/implementations/feature.md
+planspec:code-reviewer --phase 2 --impl-spec planspec/implementations/feature.md
 ```
 
 ## When to Use
 
 - After completing a phase of implementation tasks
 - Before moving to the next phase
-- When impl-spec checkpoint says "Run: planspec:code-reviewer"
+- When impl-spec checkpoint says "Run: `planspec:code-reviewer`"
 
 ## Process
 
@@ -103,12 +103,12 @@ Structure findings by severity:
   - Why: [Impact/risk]
   - Fix: [Specific suggestion]
 
-#### 🟡 Should Fix (important but not blocking)
+#### 🟠 Should Fix (important but not blocking)
 - **[File:Line]** [Issue description]
   - Why: [Impact/risk]
   - Fix: [Specific suggestion]
 
-#### 🟢 Suggestions (minor improvements)
+#### 🟡 Suggestions (minor improvements)
 - **[File:Line]** [Suggestion]
 
 ### Missing Test Coverage
@@ -167,7 +167,7 @@ Structure findings by severity:
 ✅ Code Review Passed
 
 Tests: 12 passing
-Issues: 0 blocking, 2 suggestions noted
+Issues: 0 blocking, 0 should-fix, 2 suggestions
 Design alignment: All criteria met
 
 Cleared to proceed to Phase [N+1].

@@ -10,7 +10,7 @@ Transform validated design specs into actionable, phased implementation plans.
 ## Usage
 
 ```
-/impl-spec planspec/designs/[topic].md
+planspec:impl-spec planspec/designs/[topic].md
 ```
 
 ## Input Requirements
@@ -192,9 +192,12 @@ Create file at `planspec/implementations/[topic].md`:
 date: YYYY-MM-DD
 design-spec: ../designs/[topic].md
 status: ready
+executor: planspec:impl-spec-executor
 ---
 
 # Implementation: [Title]
+
+> **Execute with:** `planspec:impl-spec-executor planspec/implementations/[topic].md`
 
 ## Overview
 
@@ -267,7 +270,7 @@ Summary:
 Prerequisites to verify:
 - [Any blocking dependencies]
 
-Ready to execute with: planspec:execute-impl
+Ready to execute with: planspec:impl-spec-executor planspec/implementations/[topic].md
 ```
 
 ---

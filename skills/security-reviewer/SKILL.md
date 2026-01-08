@@ -10,12 +10,12 @@ Focused security review for code touching sensitive areas.
 ## Usage
 
 ```
-/security-reviewer
+planspec:security-reviewer
 ```
 
 With specific focus:
 ```
-/security-reviewer --focus auth,input-validation
+planspec:security-reviewer --focus auth,input-validation
 ```
 
 ## When to Use

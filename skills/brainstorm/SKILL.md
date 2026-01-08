@@ -395,9 +395,12 @@ All applicable sections presented and validated with implementation-ready detail
 ---
 date: YYYY-MM-DD
 status: approved
+impl-spec: planspec:impl-spec
 ---
 
 # [Design Title]
+
+> **Next step:** `planspec:impl-spec planspec/designs/[topic].md`
 
 ## Problem
 
