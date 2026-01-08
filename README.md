@@ -4,8 +4,9 @@ Design-first development workflow for Claude Code. Transform ideas into validate
 
 ## Installation
 
-```bash
-claude mcp add-json planspec '{"type":"github","repo":"elertan/planspec"}'
+```
+/plugin marketplace add elertan/planspec
+/plugin install planspec@planspec
 ```
 
 ## Skills

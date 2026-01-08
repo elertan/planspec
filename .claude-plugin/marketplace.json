@@ -1,18 +1,21 @@
 {
   "name": "planspec",
-  "description": "Design-first development workflow for Claude Code",
   "owner": {
     "name": "elertan"
+  },
+  "metadata": {
+    "description": "Design-first development workflow for Claude Code",
+    "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "planspec",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/elertan/planspec.git"
+      },
       "description": "Design-first development workflow: brainstorming, implementation specs, code review, and security review",
-      "version": "1.0.0",
-      "source": "./",
-      "author": {
-        "name": "elertan"
-      }
+      "version": "1.0.0"
     }
   ]
 }
