@@ -32,6 +32,7 @@ Transform ideas into validated, detailed design specifications through structure
 - **Be flexible** - Revisit earlier decisions when new information emerges
 - **Verify, don't assume** - Discover actual constraints before designing. If you haven't inspected it, you don't know it. Assumptions must be flagged as uncertain.
 - **Precision over impressiveness** - State exactly what an advantage does and doesn't protect against. Vague benefits mislead decisions. "Future-proof against X" must specify what X is and acknowledge what still breaks.
+- **Assume failure** - For every operation or decision, ask: "What if this fails/goes wrong?" Don't design only the happy path. If something can fail, the design must address: (1) how we detect it, (2) whether it's recoverable, (3) what we do about it.
 
 ---
 
