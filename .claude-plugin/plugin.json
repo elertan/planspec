@@ -1,0 +1,12 @@
+{
+  "name": "planspec",
+  "description": "Design-first development workflow: brainstorming, implementation specs, code review, and security review",
+  "version": "1.0.0",
+  "author": {
+    "name": "elertan"
+  },
+  "homepage": "https://github.com/elertan/planspec",
+  "repository": "https://github.com/elertan/planspec",
+  "license": "MIT",
+  "keywords": ["design", "specification", "implementation", "code-review", "security", "workflow"]
+}
