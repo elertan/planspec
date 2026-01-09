@@ -29,14 +29,14 @@ This skill runs in **main context** and spawns subagents for:
 ```
 impl-spec-executor (SKILL - main context)
     │
-    ├─► Phase 1: Task(general-purpose) → implements all phase 1 tasks
+    ├─► Phase 1: Task(implementer-prompt.md) → implements all phase 1 tasks
     │       └─► checkpoint: spawn reviewers
-    │           └─► Task(general-purpose, code-reviewer-prompt.md)
+    │           └─► Task(code-reviewer-prompt.md)
     │
-    ├─► Phase 2: Task(general-purpose) → implements all phase 2 tasks
+    ├─► Phase 2: Task(implementer-prompt.md) → implements all phase 2 tasks
     │       └─► checkpoint: spawn reviewers (parallel if both)
-    │           ├─► Task(general-purpose, code-reviewer-prompt.md)
-    │           └─► Task(general-purpose, security-reviewer-prompt.md)
+    │           ├─► Task(code-reviewer-prompt.md)
+    │           └─► Task(security-reviewer-prompt.md)
     ...
 ```
 
@@ -75,37 +75,16 @@ For each phase in order:
 
 2. **Spawn implementation subagent:**
 
-   Use `Task` tool with `subagent_type: "general-purpose"`:
+   Read `./implementer-prompt.md`, substitute variables:
+   - `{TOPIC}` (extracted from impl-spec filename)
+   - `{PHASE_NUMBER}`, `{PHASE_NAME}`
+   - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+   - `{PHASE_TASKS}` (full text of all tasks in phase)
 
    ```
    Task(
      description: "Implement Phase [N]: [phase name]",
-     prompt: """
-       You are implementing Phase [N] of [topic].
-
-       ## Context
-       - Implementation spec: [path]
-       - Design spec: [path]
-
-       ## Tasks to implement:
-       [Full text of all tasks in this phase]
-
-       ## Instructions:
-       1. Implement each task in order
-       2. Follow the design spec requirements exactly
-       3. Match existing codebase patterns
-       4. Run tests after implementation
-       5. Commit after significant tasks with format:
-          feat([topic]): [what was done]
-
-          Task [X.Y]: [task title]
-
-       ## Report back:
-       - Tasks completed
-       - Files created/modified
-       - Test results
-       - Any blockers or questions
-     """
+     prompt: [constructed from template]
    )
    ```
 
@@ -312,16 +291,24 @@ Gate: Tests pass, issues resolved before Phase 3.
 
 ## Prompt Templates
 
-Reviewer prompts are in this directory:
+All subagent prompts are in this directory:
+- `./implementer-prompt.md` - Phase implementation
 - `./code-reviewer-prompt.md` - Code quality and correctness review
 - `./security-reviewer-prompt.md` - Security-focused review
 
 These templates have variables that get substituted with actual values:
-- `{PHASE_NUMBER}`, `{PHASE_NAME}`
-- `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-- `{PHASE_TASKS}` (code reviewer)
-- `{BASE_SHA}`, `{HEAD_SHA}` (git range for diff)
-- `{SECURITY_CONCERNS}` (security reviewer only)
+
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `{TOPIC}` | implementer | Feature name from impl-spec filename |
+| `{PHASE_NUMBER}` | all | Current phase number |
+| `{PHASE_NAME}` | all | Current phase name |
+| `{IMPL_SPEC_PATH}` | all | Path to implementation spec |
+| `{DESIGN_SPEC_PATH}` | all | Path to design spec |
+| `{PHASE_TASKS}` | implementer, code-reviewer | Full text of phase tasks |
+| `{BASE_SHA}` | reviewers | Git commit before phase |
+| `{HEAD_SHA}` | reviewers | Git commit after phase |
+| `{SECURITY_CONCERNS}` | security-reviewer | Why security review triggered |
 
 ---
 
