@@ -44,9 +44,9 @@ impl-spec-executor (SKILL - main context)
 
 ## MANDATORY: Checkpoint Protocol
 
-⚠️ **YOU MUST EXECUTE THIS AFTER EVERY PHASE. SKIPPING IS NOT ALLOWED.**
+⚠️ **YOU MUST EXECUTE THIS WHEN YOU SEE A CHECKPOINT. SKIPPING IS NOT ALLOWED.**
 
-After EVERY phase implementation completes:
+At every checkpoint:
 
 1. **STOP** all implementation work
 2. **Spawn code reviewer** Task (ALWAYS - no exceptions)
