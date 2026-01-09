@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Design-first development workflow with autonomous execution for Claude Code",
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "plugins": [
     {
@@ -15,7 +15,7 @@
         "url": "https://github.com/elertan/planspec.git"
       },
       "description": "Design-first development workflow: brainstorming, implementation specs, autonomous execution, code review, and security review",
-      "version": "1.7.0"
+      "version": "1.8.0"
     }
   ]
 }

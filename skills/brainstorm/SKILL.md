@@ -26,7 +26,8 @@ Transform ideas into validated, detailed design specifications through structure
 
 - **Extended thinking always** - Use extended thinking at every step. This is implicit in all instructions below—don't skip it. Think before acting, trace implications, question assumptions.
 - **One question at a time** - Never overwhelm with multiple questions
-- **Multiple choice preferred** - Easier than open-ended when feasible. Always accept free-form text responses—user can type anything and we infer intent. Multiple choice guides, not restricts.
+- **No AskUserQuestion tool** - Never use the AskUserQuestion tool. Present all questions as plain text in your response.
+- **Multiple choice preferred** - Easier than open-ended when feasible. Format options as A) B) C) etc. Always accept free-form text responses—user can type anything and we infer intent. Multiple choice guides, not restricts.
 - **YAGNI ruthlessly** - Cut unnecessary complexity from all designs
 - **Incremental validation** - Present in chunks, confirm each before continuing
 - **Be flexible** - Revisit earlier decisions when new information emerges
