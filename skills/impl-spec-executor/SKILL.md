@@ -130,7 +130,8 @@ At each `### CHECKPOINT` in the impl-spec:
 2. **Gather context for reviewers:**
    - Phase number and name
    - Tasks completed this phase
-   - Files changed: `git diff --name-only [start-sha]..HEAD`
+   - Base SHA (commit before phase started)
+   - Head SHA (current commit after phase)
    - Design spec path
 
 3. **Spawn code reviewer (always):**
@@ -138,7 +139,8 @@ At each `### CHECKPOINT` in the impl-spec:
    Read `./code-reviewer-prompt.md`, substitute variables:
    - `{PHASE_NUMBER}`, `{PHASE_NAME}`
    - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-   - `{PHASE_TASKS}`, `{FILES_CHANGED}`
+   - `{PHASE_TASKS}`
+   - `{BASE_SHA}`, `{HEAD_SHA}`
 
    ```
    Task(
@@ -152,7 +154,8 @@ At each `### CHECKPOINT` in the impl-spec:
    Read `./security-reviewer-prompt.md`, substitute variables:
    - `{PHASE_NUMBER}`, `{PHASE_NAME}`
    - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-   - `{SECURITY_CONCERNS}`, `{FILES_CHANGED}`
+   - `{SECURITY_CONCERNS}`
+   - `{BASE_SHA}`, `{HEAD_SHA}`
 
    ```
    Task(
@@ -316,7 +319,8 @@ Reviewer prompts are in this directory:
 These templates have variables that get substituted with actual values:
 - `{PHASE_NUMBER}`, `{PHASE_NAME}`
 - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-- `{PHASE_TASKS}`, `{FILES_CHANGED}`
+- `{PHASE_TASKS}` (code reviewer)
+- `{BASE_SHA}`, `{HEAD_SHA}` (git range for diff)
 - `{SECURITY_CONCERNS}` (security reviewer only)
 
 ---
