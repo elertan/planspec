@@ -42,6 +42,37 @@ impl-spec-executor (SKILL - main context)
 
 ---
 
+## MANDATORY: Checkpoint Protocol
+
+⚠️ **YOU MUST EXECUTE THIS AFTER EVERY PHASE. SKIPPING IS NOT ALLOWED.**
+
+After EVERY phase implementation completes:
+
+1. **STOP** all implementation work
+2. **Spawn code reviewer** Task (ALWAYS - no exceptions)
+3. **Spawn security reviewer** Task (if `Security:` line present in checkpoint)
+4. **WAIT** for reviewer results - do not proceed until you have verdicts
+5. **Output checkpoint summary** (format below) - this is required
+6. **If issues found:** fix and re-run reviewers until PASS
+7. **Only proceed** to next phase when all verdicts are PASS
+
+**Required checkpoint output format:**
+
+```
+═══════════════════════════════════════════════════════════
+CHECKPOINT: Phase [N] Complete
+═══════════════════════════════════════════════════════════
+Code Review:     [PASS/FAIL] - [1-line summary]
+Security Review: [PASS/FAIL/N/A] - [1-line summary or "not required"]
+───────────────────────────────────────────────────────────
+Verdict: [PROCEED TO PHASE N+1 / BLOCKED - fixing issues]
+═══════════════════════════════════════════════════════════
+```
+
+**If you skip this protocol, the implementation is invalid and must be redone.**
+
+---
+
 ## Process
 
 ### Step 1: Initialize
@@ -72,6 +103,7 @@ For each phase in order:
    - Phase number and name
    - All tasks in the phase
    - Checkpoint requirements (parse `Security:` line if present)
+   - **Record BASE_SHA** (current commit) for reviewers
 
 2. **Spawn implementation subagent:**
 
@@ -91,13 +123,25 @@ For each phase in order:
 3. **Handle subagent response:**
    - If questions → answer and re-dispatch
    - If blockers → surface to user
-   - If completed → proceed to checkpoint
+   - If completed → **MANDATORY: execute checkpoint protocol**
 
-4. **At checkpoint** → see Review Checkpoint below
+4. **CHECKPOINT GATE (MANDATORY - DO NOT SKIP)**
 
-5. **Proceed to next phase** only after checkpoint passes
+   ⚠️ **You MUST execute the checkpoint protocol defined above.**
 
-### Review Checkpoint
+   - Record HEAD_SHA (current commit after implementation)
+   - Spawn code reviewer Task → WAIT for verdict
+   - Spawn security reviewer Task (if applicable) → WAIT for verdict
+   - Output the checkpoint summary format
+   - Resolve any issues before proceeding
+
+   See "Review Checkpoint" section below for full details.
+
+5. **Proceed to next phase** ONLY after checkpoint passes with all PASS verdicts
+
+### Review Checkpoint (MANDATORY)
+
+⚠️ **This section is NOT optional. Execute it after EVERY phase.**
 
 At each `### CHECKPOINT` in the impl-spec:
 
@@ -167,7 +211,22 @@ At each `### CHECKPOINT` in the impl-spec:
           Continue loop
    ```
 
-6. **Only proceed when all reviewers pass**
+6. **Output checkpoint summary (REQUIRED)**
+
+   You MUST output the checkpoint summary before proceeding:
+
+   ```
+   ═══════════════════════════════════════════════════════════
+   CHECKPOINT: Phase [N] Complete
+   ═══════════════════════════════════════════════════════════
+   Code Review:     [PASS/FAIL] - [1-line summary from reviewer]
+   Security Review: [PASS/FAIL/N/A] - [1-line summary or "not required"]
+   ───────────────────────────────────────────────────────────
+   Verdict: [PROCEED TO PHASE N+1 / BLOCKED - fixing issues]
+   ═══════════════════════════════════════════════════════════
+   ```
+
+7. **Only proceed when all reviewers pass**
 
 ### Step 3: Completion
 
@@ -280,6 +339,7 @@ Gate: Tests pass, issues resolved before Phase 3.
 
 ## Principles
 
+- **Checkpoints are mandatory** - NEVER skip reviewer spawning. Every phase MUST have code review.
 - **Spec is source of truth** - Don't deviate without explicit approval
 - **Atomic commits** - Each commit is a logical unit
 - **Phase-level subagents** - One implementation subagent per phase (not per task)
