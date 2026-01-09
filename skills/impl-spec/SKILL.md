@@ -147,12 +147,9 @@ Group tasks into logical phases:
 - [Edge cases from design spec's Behavior section]
 - [Error cases from design spec]
 
-### CHECKPOINT: Review
+### CHECKPOINT
 
-**Run:** `planspec:code-reviewer`
-- Reviews code quality and patterns
-- Runs tests to verify correctness
-- Fix any issues before proceeding
+Gate: Tests pass, issues resolved before Phase 3.
 
 ---
 
@@ -161,12 +158,11 @@ Group tasks into logical phases:
 ### Task 3.1: ...
 ### Task 3.2: Write tests for Phase 3
 
-### CHECKPOINT: Review + Security
+### CHECKPOINT
 
-**Run:** `planspec:code-reviewer`
-**Run:** `planspec:security-reviewer`
-- Security review for auth/input handling/etc.
-- Fix any issues before proceeding
+Security: Auth flow, user input handling, database queries
+
+Gate: Tests pass, issues resolved before completion.
 ```
 
 ### Step 5: Map Design to Tasks
@@ -204,7 +200,7 @@ executor: planspec:impl-spec-executor
 [1-2 sentence summary of what we're implementing]
 
 **Design spec:** [link to design spec]
-**Security review required:** Yes/No (phases X, Y)
+**Security reviews:** Phases X, Y (or "None")
 
 ## Prerequisites
 
@@ -235,12 +231,7 @@ executor: planspec:impl-spec-executor
 
 ### CHECKPOINT
 
-| Review | Required | Focus |
-|--------|----------|-------|
-| Code review | Yes | Quality, patterns, correctness |
-| Security review | No | - |
-
-**Gate:** All tests pass, review issues resolved before Phase 3.
+Gate: Tests pass, issues resolved before Phase 3.
 
 ---
 
@@ -264,8 +255,8 @@ Implementation spec created: planspec/implementations/[topic].md
 Summary:
 - Phases: [N]
 - Tasks: [M]
-- Review checkpoints: [X]
-- Security reviews required: [Y/N] (phases: [list])
+- Checkpoints: [X]
+- Security reviews: Phases [list] (or "None")
 
 Prerequisites to verify:
 - [Any blocking dependencies]
@@ -294,4 +285,4 @@ Ready to execute with: planspec:impl-spec-executor planspec/implementations/[top
 | Phases | Logical groupings with review gates |
 | Tasks | Mid-level granularity, verifiable |
 | Tests | Per-phase, meaningful edge cases |
-| Reviews | Code review every phase, security review where flagged |
+| Reviews | Code review at every checkpoint, security review where `Security:` specified |

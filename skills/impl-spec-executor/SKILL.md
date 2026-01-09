@@ -1,11 +1,11 @@
 ---
 name: impl-spec-executor
-description: Execute implementation specs autonomously. Takes an impl-spec file, creates a topic branch, executes all phases/tasks, runs reviewers at checkpoints, and commits after significant tasks. Surfaces to user only when issues can't be auto-resolved.
+description: Execute implementation specs autonomously. Takes an impl-spec file, creates a topic branch, spawns implementation subagents per phase, runs reviewers at checkpoints. Surfaces to user only when issues can't be auto-resolved.
 ---
 
 # Implementation Spec Executor
 
-Execute validated implementation specs through to completion.
+Execute validated implementation specs through to completion using subagents.
 
 ## Usage
 
@@ -19,6 +19,29 @@ planspec:impl-spec-executor planspec/implementations/[topic].md
 - Design spec referenced in impl-spec is approved
 - Working directory is clean (no uncommitted changes)
 
+## Architecture
+
+This skill runs in **main context** and spawns subagents for:
+- **Implementation** - One subagent per phase (implements all tasks in phase)
+- **Code review** - At checkpoints (always)
+- **Security review** - At checkpoints (only if `Security:` line present)
+
+```
+impl-spec-executor (SKILL - main context)
+    │
+    ├─► Phase 1: Task(general-purpose) → implements all phase 1 tasks
+    │       └─► checkpoint: spawn reviewers
+    │           └─► Task(general-purpose, code-reviewer-prompt.md)
+    │
+    ├─► Phase 2: Task(general-purpose) → implements all phase 2 tasks
+    │       └─► checkpoint: spawn reviewers (parallel if both)
+    │           ├─► Task(general-purpose, code-reviewer-prompt.md)
+    │           └─► Task(general-purpose, security-reviewer-prompt.md)
+    ...
+```
+
+---
+
 ## Process
 
 ### Step 1: Initialize
@@ -26,7 +49,7 @@ planspec:impl-spec-executor planspec/implementations/[topic].md
 1. **Validate input:**
    - Read impl-spec file
    - Verify `status: ready`
-   - Verify linked design spec exists
+   - Verify linked design spec exists and read it
 
 2. **Check git state:**
    - Verify working directory is clean
@@ -39,81 +62,119 @@ planspec:impl-spec-executor planspec/implementations/[topic].md
 
 4. **Update impl-spec status:**
    - Change `status: ready` → `status: in-progress`
+   - Commit: `chore([topic]): start implementation`
 
 ### Step 2: Execute Phases
 
 For each phase in order:
 
-1. **Read phase tasks**
-2. **Execute tasks** (see Task Execution below)
-3. **At checkpoint** (see Review Checkpoint below)
-4. **Proceed to next phase** only after checkpoint passes
+1. **Extract phase info:**
+   - Phase number and name
+   - All tasks in the phase
+   - Checkpoint requirements (parse `Security:` line if present)
 
-### Task Execution
+2. **Spawn implementation subagent:**
 
-For each task in phase:
+   Use `Task` tool with `subagent_type: "general-purpose"`:
 
-1. **Read task requirements:**
-   - Context (why)
-   - Files to create/modify
-   - Requirements from design spec
-   - Acceptance criteria
-
-2. **Implement:**
-   - Follow requirements exactly
-   - Match existing codebase patterns
-   - No over-engineering beyond spec
-
-3. **Self-verify:**
-   - Check acceptance criteria
-   - Run relevant tests if they exist
-
-4. **Commit when appropriate:**
-
-   **Commit after:**
-   - Each significant standalone task
-   - A logical group of small related tasks (e.g., 1.1 + 1.2 + 1.3 if they form one unit)
-
-   **Commit message format:**
    ```
-   feat([topic]): [what was done]
+   Task(
+     description: "Implement Phase [N]: [phase name]",
+     prompt: """
+       You are implementing Phase [N] of [topic].
 
-   Task [X.Y]: [task title]
-   - [key change 1]
-   - [key change 2]
+       ## Context
+       - Implementation spec: [path]
+       - Design spec: [path]
+
+       ## Tasks to implement:
+       [Full text of all tasks in this phase]
+
+       ## Instructions:
+       1. Implement each task in order
+       2. Follow the design spec requirements exactly
+       3. Match existing codebase patterns
+       4. Run tests after implementation
+       5. Commit after significant tasks with format:
+          feat([topic]): [what was done]
+
+          Task [X.Y]: [task title]
+
+       ## Report back:
+       - Tasks completed
+       - Files created/modified
+       - Test results
+       - Any blockers or questions
+     """
+   )
    ```
+
+3. **Handle subagent response:**
+   - If questions → answer and re-dispatch
+   - If blockers → surface to user
+   - If completed → proceed to checkpoint
+
+4. **At checkpoint** → see Review Checkpoint below
+
+5. **Proceed to next phase** only after checkpoint passes
 
 ### Review Checkpoint
 
 At each `### CHECKPOINT` in the impl-spec:
 
-1. **Determine required reviews:**
-   - Code review: always required
-   - Security review: only if checkpoint specifies
+1. **Parse checkpoint:**
+   - Look for `Security:` line
+   - If present, extract the concerns (e.g., "Auth flow, user input handling")
+   - If absent, no security review needed
 
-2. **Spawn reviewers in parallel:**
+2. **Gather context for reviewers:**
+   - Phase number and name
+   - Tasks completed this phase
+   - Files changed: `git diff --name-only [start-sha]..HEAD`
+   - Design spec path
+
+3. **Spawn code reviewer (always):**
+
+   Read `./code-reviewer-prompt.md`, substitute variables:
+   - `{PHASE_NUMBER}`, `{PHASE_NAME}`
+   - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+   - `{PHASE_TASKS}`, `{FILES_CHANGED}`
+
    ```
-   # Always:
-   - planspec:code-reviewer --phase [N] --impl-spec [path]
-
-   # Only if checkpoint specifies security review:
-   - planspec:security-reviewer --phase [N] --impl-spec [path]
+   Task(
+     description: "Code review Phase [N]",
+     prompt: [constructed from template]
+   )
    ```
 
-3. **Wait for all spawned reviewers to complete**
+4. **Spawn security reviewer (if `Security:` line present):**
 
-4. **Evaluate results:**
+   Read `./security-reviewer-prompt.md`, substitute variables:
+   - `{PHASE_NUMBER}`, `{PHASE_NAME}`
+   - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+   - `{SECURITY_CONCERNS}`, `{FILES_CHANGED}`
+
+   ```
+   Task(
+     description: "Security review Phase [N]",
+     prompt: [constructed from template]
+   )
+   ```
+
+   **Run both reviewers in parallel** if security review needed.
+
+5. **Evaluate results:**
 
    **All pass → proceed to next phase**
 
-   **Issues found → enter resolution loop:**
+   **Issues found → resolution loop:**
 
    ```
-   WHILE issues exist:
+   WHILE blocking issues exist:
      1. Read all issues from reviewers
-     2. Attempt to fix each issue
+     2. Fix each issue (in main context, not subagent)
      3. Commit fixes: "fix([topic]): address review feedback"
-     4. Re-run same reviewers that were spawned (in parallel if multiple)
+     4. Re-run same reviewers that found issues
      5. IF same issues persist after 3 attempts:
           Surface to user with:
           - What was tried
@@ -124,20 +185,20 @@ At each `### CHECKPOINT` in the impl-spec:
           Continue loop
    ```
 
-5. **Only proceed when all spawned reviewers pass**
+6. **Only proceed when all reviewers pass**
 
 ### Step 3: Completion
 
 After all phases complete:
 
 1. **Final verification:**
-   - All tasks marked complete in impl-spec
    - All tests passing
    - All checkpoints passed
 
 2. **Update impl-spec:**
    - Change `status: in-progress` → `status: completed`
    - Add completion date
+   - Commit: `docs([topic]): mark implementation complete`
 
 3. **Report summary:**
    ```
@@ -181,17 +242,16 @@ Options:
 Waiting for input...
 ```
 
-### Task Implementation Failure
+### Implementation Subagent Failure
 
-When a task can't be implemented as specified:
+When subagent reports blocker:
 
 ```
-⚠️ Task Implementation Blocked
+⚠️ Implementation Blocked
 
+Phase: [N]
 Task: [X.Y] - [title]
-Blocker: [specific issue]
-
-The design spec may need revision, or there's missing context.
+Blocker: [from subagent report]
 
 Options:
 1. Provide additional context
@@ -216,30 +276,48 @@ Attempting auto-fix...
 
 ---
 
+## Checkpoint Format Reference
+
+Checkpoint with code review only (default):
+```markdown
+### CHECKPOINT
+
+Gate: Tests pass, issues resolved before Phase 2.
+```
+
+Checkpoint with security review:
+```markdown
+### CHECKPOINT
+
+Security: Auth flow, user input handling, database queries
+
+Gate: Tests pass, issues resolved before Phase 3.
+```
+
+---
+
 ## Principles
 
 - **Spec is source of truth** - Don't deviate without explicit approval
 - **Atomic commits** - Each commit is a logical unit
-- **Parallel reviews** - Code and security reviews run simultaneously
+- **Phase-level subagents** - One implementation subagent per phase (not per task)
+- **Parallel reviews** - Code and security reviews run simultaneously when both needed
 - **Fail fast, surface early** - Don't spin on unresolvable issues
 - **Clean state** - Always leave repo in buildable, testable state
 
 ---
 
-## Sub-Agent Protocol
+## Prompt Templates
 
-This executor runs as a sub-agent and spawns its own sub-agents.
+Reviewer prompts are in this directory:
+- `./code-reviewer-prompt.md` - Code quality and correctness review
+- `./security-reviewer-prompt.md` - Security-focused review
 
-**When spawning reviewers:**
-- Pass impl-spec path and current phase
-- Reviewers return structured results (pass/fail + issues)
-- Parse results to determine next action
-
-**When reporting back:**
-- Return completion status
-- Include summary of work done
-- Include any deviations from spec (with justification)
-- Include branch name for next steps
+These templates have variables that get substituted with actual values:
+- `{PHASE_NUMBER}`, `{PHASE_NAME}`
+- `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+- `{PHASE_TASKS}`, `{FILES_CHANGED}`
+- `{SECURITY_CONCERNS}` (security reviewer only)
 
 ---
 
@@ -249,6 +327,7 @@ This executor runs as a sub-agent and spawns its own sub-agents.
 |-------|---------------------|
 | Output | Completed implementation on topic branch |
 | Branch | `feature/[topic]` |
-| Commits | After significant tasks |
-| Reviews | Parallel at checkpoints |
+| Implementation | One subagent per phase |
+| Code review | At every checkpoint |
+| Security review | Only when `Security:` line present |
 | Escalation | After 3 failed resolution attempts |
