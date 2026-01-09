@@ -505,6 +505,8 @@ If present, note why deferred and what risk was acknowledged.]
 
 6. If yes, invoke `planspec:impl-spec [path-to-design-spec]` to generate the implementation plan
 
+   **CRITICAL: You MUST invoke impl-spec here. Do NOT skip this step and jump directly to implementation, even if the design spec already contains implementation details like code snippets or file contents. The impl-spec creates a structured task breakdown that is a separate, required step in the workflow.**
+
 ---
 
 ## Quick Reference
