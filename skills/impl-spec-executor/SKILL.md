@@ -5,7 +5,7 @@ description: Execute implementation specs autonomously. Takes an impl-spec file,
 
 # Implementation Spec Executor
 
-Execute validated implementation specs through to completion using subagents.
+Execute validated implementation specs through to completion using subagents and task tracking.
 
 ## Usage
 
@@ -21,97 +21,175 @@ planspec:impl-spec-executor planspec/implementations/[topic].md
 
 ## Architecture
 
-This skill runs in **main context** and spawns subagents for:
-- **Implementation** - One subagent per phase (implements all tasks in phase)
-- **Code review** - At checkpoints (always)
-- **Security review** - At checkpoints (only if `Security:` line present)
+This skill runs in **main context** and uses:
+- **Task system** - Track progress and enforce phase dependencies
+- **Implementation subagents** - One per phase (implements tasks or fixes review issues)
+- **Reviewer subagents** - Code review (always) and security review (when needed)
 
 ```
 impl-spec-executor (SKILL - main context)
     │
-    ├─► Phase 1: Task(implementer-prompt.md) → implements all phase 1 tasks
-    │       └─► checkpoint: spawn reviewers
-    │           └─► Task(code-reviewer-prompt.md)
+    ├─► [Task Graph Created Upfront]
     │
-    ├─► Phase 2: Task(implementer-prompt.md) → implements all phase 2 tasks
-    │       └─► checkpoint: spawn reviewers (parallel if both)
-    │           ├─► Task(code-reviewer-prompt.md)
-    │           └─► Task(security-reviewer-prompt.md)
-    ...
+    ├─► Initialize task
+    │
+    ├─► Phase 1: Implement task → Checkpoint task
+    │       │                         │
+    │       │                         ├─► Code Reviewer
+    │       │                         └─► Security Reviewer (if needed)
+    │       │                               │
+    │       │                         ◄─────┘ (loop until PASS)
+    │       │
+    ├─► Phase 2: Implement task → Checkpoint task
+    │       ...
+    │
+    └─► Complete task
 ```
 
 ---
 
-## MANDATORY: Checkpoint Protocol
+## Task Structure
 
-⚠️ **YOU MUST EXECUTE THIS WHEN YOU SEE A CHECKPOINT. SKIPPING IS NOT ALLOWED.**
-
-At every checkpoint:
-
-1. **STOP** all implementation work
-2. **Spawn code reviewer** Task (ALWAYS - no exceptions)
-3. **Spawn security reviewer** Task (if `Security:` line present in checkpoint)
-4. **WAIT** for reviewer results - do not proceed until you have verdicts
-5. **Output checkpoint summary** (format below) - this is required
-6. **If issues found:** fix and re-run reviewers until PASS
-7. **Only proceed** to next phase when all verdicts are PASS
-
-**Required checkpoint output format:**
+Tasks are created upfront to enforce dependencies:
 
 ```
-═══════════════════════════════════════════════════════════
-CHECKPOINT: Phase [N] Complete
-═══════════════════════════════════════════════════════════
-Code Review:     [PASS/FAIL] - [1-line summary]
-Security Review: [PASS/FAIL/N/A] - [1-line summary or "not required"]
-───────────────────────────────────────────────────────────
-Verdict: [PROCEED TO PHASE N+1 / BLOCKED - fixing issues]
-═══════════════════════════════════════════════════════════
+[1] Initialize
+[2] Implement Phase 1     (blockedBy: 1)
+[3] Checkpoint Phase 1    (blockedBy: 2)
+[4] Implement Phase 2     (blockedBy: 3)
+[5] Checkpoint Phase 2    (blockedBy: 4)
+...
+[N] Complete              (blockedBy: last checkpoint)
 ```
 
-**If you skip this protocol, the implementation is invalid and must be redone.**
+The `blockedBy` relationships enforce:
+- Can't start implementation until previous checkpoint passes
+- Can't run checkpoint until implementation completes
+- Can't complete until all phases pass
 
 ---
 
 ## Process
 
+### Step 0: Create Task Graph
+
+Before any work, create the full task graph for visibility and enforcement.
+
+1. **Parse impl-spec** to extract:
+   - Number of phases
+   - Phase names
+   - Which phases need security review (have `Security:` line in checkpoint)
+
+2. **Create all tasks upfront:**
+
+   ```
+   INIT_ID = TaskCreate(
+     subject: "Initialize: create branch and update status",
+     description: "Create topic branch, update impl-spec status to in-progress",
+     activeForm: "Initializing"
+   )
+
+   For each phase N:
+     IMPL_IDS[N] = TaskCreate(
+       subject: "Implement Phase N: [phase name]",
+       description: "Execute all tasks in phase N via implementer subagent",
+       activeForm: "Implementing Phase N"
+     )
+
+     CHECKPOINT_IDS[N] = TaskCreate(
+       subject: "Checkpoint Phase N",
+       description: "Run code review [+ security review], fix issues until all PASS",
+       activeForm: "Reviewing Phase N"
+     )
+
+   COMPLETE_ID = TaskCreate(
+     subject: "Complete: finalize and report",
+     description: "Update impl-spec status to completed, output summary",
+     activeForm: "Completing"
+   )
+   ```
+
+3. **Set dependencies:**
+
+   ```
+   TaskUpdate(IMPL_IDS[1], addBlockedBy: [INIT_ID])
+   TaskUpdate(CHECKPOINT_IDS[1], addBlockedBy: [IMPL_IDS[1]])
+
+   For N > 1:
+     TaskUpdate(IMPL_IDS[N], addBlockedBy: [CHECKPOINT_IDS[N-1]])
+     TaskUpdate(CHECKPOINT_IDS[N], addBlockedBy: [IMPL_IDS[N]])
+
+   TaskUpdate(COMPLETE_ID, addBlockedBy: [CHECKPOINT_IDS[last]])
+   ```
+
+4. **Output task graph:**
+
+   ```
+   Task graph created for [topic]:
+
+   [1] Initialize
+   [2] Implement Phase 1: [name]     (blocked by: 1)
+   [3] Checkpoint Phase 1            (blocked by: 2)
+   [4] Implement Phase 2: [name]     (blocked by: 3)
+   [5] Checkpoint Phase 2            (blocked by: 4)
+   ...
+   [N] Complete                      (blocked by: [last checkpoint])
+
+   Security reviews: Phases [list] (or "None")
+   ```
+
 ### Step 1: Initialize
 
-1. **Validate input:**
+1. **Verify task ready:**
+   - `TaskGet(INIT_ID)` → verify `blockedBy` is empty
+   - If blocked → ERROR (should never happen for init)
+
+2. **Mark in progress:**
+   - `TaskUpdate(INIT_ID, status: in_progress)`
+
+3. **Validate input:**
    - Read impl-spec file
    - Verify `status: ready`
    - Verify linked design spec exists and read it
 
-2. **Check git state:**
+4. **Check git state:**
    - Verify working directory is clean
    - If uncommitted changes exist, abort with message
 
-3. **Create topic branch:**
+5. **Create topic branch:**
    - Extract topic from impl-spec filename (e.g., `user-auth` from `user-auth.md`)
    - Create and checkout branch: `git checkout -b feature/[topic]`
    - If branch exists, abort and ask user how to proceed
 
-4. **Update impl-spec status:**
+6. **Update impl-spec status:**
    - Change `status: ready` → `status: in-progress`
    - Commit: `chore([topic]): start implementation`
+
+7. **Mark completed:**
+   - `TaskUpdate(INIT_ID, status: completed)`
 
 ### Step 2: Execute Phases
 
 For each phase in order:
 
-1. **Extract phase info:**
-   - Phase number and name
-   - All tasks in the phase
-   - Checkpoint requirements (parse `Security:` line if present)
-   - **Record BASE_SHA** (current commit) for reviewers
+#### 2.1 Implementation
 
-2. **Spawn implementation subagent:**
+1. **Verify task ready:**
+   - `TaskGet(IMPL_IDS[N])` → verify `blockedBy` is empty
+   - If blocked → STOP (previous checkpoint didn't pass)
+
+2. **Mark in progress:**
+   - `TaskUpdate(IMPL_IDS[N], status: in_progress)`
+
+3. **Record BASE_SHA** (current commit before implementation)
+
+4. **Spawn implementation subagent:**
 
    Read `./implementer-prompt.md`, substitute variables:
-   - `{TOPIC}` (extracted from impl-spec filename)
+   - `{TOPIC}` - extracted from impl-spec filename
    - `{PHASE_NUMBER}`, `{PHASE_NAME}`
    - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-   - `{PHASE_TASKS}` (full text of all tasks in phase)
+   - `{PHASE_TASKS}` - full text of all tasks in phase
 
    ```
    Task(
@@ -120,175 +198,191 @@ For each phase in order:
    )
    ```
 
-3. **Handle subagent response:**
-   - If questions → answer and re-dispatch
-   - If blockers → surface to user
-   - If completed → **MANDATORY: execute checkpoint protocol**
+5. **Handle subagent response:**
+   - If blocker reported → surface to user, wait for guidance
+   - If execution error → surface to user (see Error Handling)
+   - If completed → proceed to checkpoint
 
-4. **CHECKPOINT GATE (MANDATORY - DO NOT SKIP)**
+6. **Record HEAD_SHA** (current commit after implementation)
 
-   ⚠️ **You MUST execute the checkpoint protocol defined above.**
+7. **Mark completed:**
+   - `TaskUpdate(IMPL_IDS[N], status: completed)`
 
-   - Record HEAD_SHA (current commit after implementation)
-   - Spawn code reviewer Task → WAIT for verdict
-   - Spawn security reviewer Task (if applicable) → WAIT for verdict
-   - Output the checkpoint summary format
-   - Resolve any issues before proceeding
+#### 2.2 Checkpoint
 
-   See "Review Checkpoint" section below for full details.
+1. **Verify task ready:**
+   - `TaskGet(CHECKPOINT_IDS[N])` → verify `blockedBy` is empty
 
-5. **Proceed to next phase** ONLY after checkpoint passes with all PASS verdicts
+2. **Mark in progress:**
+   - `TaskUpdate(CHECKPOINT_IDS[N], status: in_progress)`
 
-### Review Checkpoint (MANDATORY)
+3. **Parse checkpoint requirements:**
+   - Look for `Security:` line in checkpoint
+   - If present, extract concerns and mark security review needed
 
-⚠️ **This section is NOT optional. Execute it after EVERY phase.**
-
-At each `### CHECKPOINT` in the impl-spec:
-
-1. **Parse checkpoint:**
-   - Look for `Security:` line
-   - If present, extract the concerns (e.g., "Auth flow, user input handling")
-   - If absent, no security review needed
-
-2. **Gather context for reviewers:**
-   - Phase number and name
-   - Tasks completed this phase
-   - Base SHA (commit before phase started)
-   - Head SHA (current commit after phase)
-   - Design spec path
-
-3. **Spawn code reviewer (always):**
-
-   Read `./code-reviewer-prompt.md`, substitute variables:
-   - `{PHASE_NUMBER}`, `{PHASE_NAME}`
-   - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-   - `{PHASE_TASKS}`
-   - `{BASE_SHA}`, `{HEAD_SHA}`
+4. **Run review loop:**
 
    ```
-   Task(
-     description: "Code review Phase [N]",
-     prompt: [constructed from template]
-   )
+   WHILE true:
+     # Run reviewers (parallel if both needed)
+     code_result = spawn_code_reviewer(phase N, BASE_SHA, HEAD_SHA)
+
+     if security_needed:
+       security_result = spawn_security_reviewer(phase N, BASE_SHA, HEAD_SHA)
+     else:
+       security_result = N/A
+
+     # Check verdicts
+     code_pass = (code_result.verdict == "PASS" or "PASS WITH FIXES")
+     security_pass = (security_result == N/A or security_result.verdict == "PASS" or "PASS WITH FIXES")
+
+     IF code_pass AND security_pass:
+       BREAK  # All passed, exit loop
+
+     # Collect all issues
+     issues = []
+     if not code_pass:
+       issues.extend(code_result.blocking_issues)
+     if not security_pass:
+       issues.extend(security_result.blocking_issues)
+
+     # Spawn implementer to fix issues
+     Task(
+       description: "Fix review issues for Phase [N]",
+       prompt: implementer-prompt.md with:
+         {PHASE_TASKS} = "Fix the following review issues:\n\n" + [formatted issues]
+     )
+
+     # Handle fix result
+     if execution_error:
+       surface_to_user()
+       wait_for_guidance()
+
+     # Update HEAD_SHA for next review iteration
+     HEAD_SHA = current commit
    ```
 
-4. **Spawn security reviewer (if `Security:` line present):**
-
-   Read `./security-reviewer-prompt.md`, substitute variables:
-   - `{PHASE_NUMBER}`, `{PHASE_NAME}`
-   - `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
-   - `{SECURITY_CONCERNS}`
-   - `{BASE_SHA}`, `{HEAD_SHA}`
-
-   ```
-   Task(
-     description: "Security review Phase [N]",
-     prompt: [constructed from template]
-   )
-   ```
-
-   **Run both reviewers in parallel** if security review needed.
-
-5. **Evaluate results:**
-
-   **All pass → proceed to next phase**
-
-   **Issues found → resolution loop:**
-
-   ```
-   WHILE blocking issues exist:
-     1. Read all issues from reviewers
-     2. Fix each issue (in main context, not subagent)
-     3. Commit fixes: "fix([topic]): address review feedback"
-     4. Re-run same reviewers that found issues
-     5. IF same issues persist after 3 attempts:
-          Surface to user with:
-          - What was tried
-          - What's still failing
-          - Request guidance
-          WAIT for user response
-          Apply user guidance
-          Continue loop
-   ```
-
-6. **Output checkpoint summary (REQUIRED)**
-
-   You MUST output the checkpoint summary before proceeding:
+5. **Output checkpoint summary:**
 
    ```
    ═══════════════════════════════════════════════════════════
    CHECKPOINT: Phase [N] Complete
    ═══════════════════════════════════════════════════════════
-   Code Review:     [PASS/FAIL] - [1-line summary from reviewer]
-   Security Review: [PASS/FAIL/N/A] - [1-line summary or "not required"]
+   Code Review:     [PASS/PASS WITH FIXES] - [1-line summary]
+   Security Review: [PASS/PASS WITH FIXES/N/A] - [1-line summary]
    ───────────────────────────────────────────────────────────
-   Verdict: [PROCEED TO PHASE N+1 / BLOCKED - fixing issues]
+   Verdict: PROCEED TO PHASE [N+1]
    ═══════════════════════════════════════════════════════════
    ```
 
-7. **Only proceed when all reviewers pass**
+6. **Mark completed:**
+   - `TaskUpdate(CHECKPOINT_IDS[N], status: completed)`
+
+7. **Proceed to next phase** (next implement task is now unblocked)
 
 ### Step 3: Completion
 
-After all phases complete:
+1. **Verify task ready:**
+   - `TaskGet(COMPLETE_ID)` → verify `blockedBy` is empty
 
-1. **Final verification:**
+2. **Mark in progress:**
+   - `TaskUpdate(COMPLETE_ID, status: in_progress)`
+
+3. **Final verification:**
    - All tests passing
-   - All checkpoints passed
+   - All checkpoints passed (verify via TaskList)
 
-2. **Update impl-spec:**
+4. **Update impl-spec:**
    - Change `status: in-progress` → `status: completed`
    - Add completion date
    - Commit: `docs([topic]): mark implementation complete`
 
-3. **Report summary:**
+5. **Report summary:**
+
    ```
-   ✅ Implementation Complete: [topic]
+   Implementation Complete: [topic]
 
    Branch: feature/[topic]
    Commits: [N]
    Phases completed: [X]
-   Review cycles: [Y]
 
    Design spec criteria met:
-   - [criterion 1]: ✓
-   - [criterion 2]: ✓
+   - [criterion 1]: Y
+   - [criterion 2]: Y
 
    Ready for: merge to main / PR creation
    ```
+
+6. **Mark completed:**
+   - `TaskUpdate(COMPLETE_ID, status: completed)`
+
+---
+
+## Spawning Reviewers
+
+### Code Reviewer
+
+Read `./code-reviewer-prompt.md`, substitute variables:
+- `{PHASE_NUMBER}`, `{PHASE_NAME}`
+- `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+- `{PHASE_TASKS}`
+- `{BASE_SHA}`, `{HEAD_SHA}`
+
+```
+Task(
+  description: "Code review Phase [N]",
+  prompt: [constructed from template]
+)
+```
+
+### Security Reviewer
+
+Read `./security-reviewer-prompt.md`, substitute variables:
+- `{PHASE_NUMBER}`, `{PHASE_NAME}`
+- `{IMPL_SPEC_PATH}`, `{DESIGN_SPEC_PATH}`
+- `{SECURITY_CONCERNS}` - from checkpoint's `Security:` line
+- `{BASE_SHA}`, `{HEAD_SHA}`
+
+```
+Task(
+  description: "Security review Phase [N]",
+  prompt: [constructed from template]
+)
+```
+
+**Run both reviewers in parallel** when security review is needed.
 
 ---
 
 ## Error Handling
 
-### Unresolvable Review Issues
+Execution errors (not review issues) are surfaced to user immediately:
 
-When issues can't be auto-resolved after 3 attempts:
+### Execution Errors
+
+When a subagent or command fails (file write fails, command fails, etc.):
 
 ```
-⚠️ Review Issues Need Guidance
+Execution Error
 
 Phase: [N]
-Attempts: 3
-
-Unresolved issues:
-- [Issue 1]: [what was tried, why it didn't work]
-- [Issue 2]: [what was tried, why it didn't work]
+Task: [what was being attempted]
+Error: [error message]
 
 Options:
 1. Provide guidance on how to resolve
-2. Mark as acceptable (with justification)
+2. Retry the operation
 3. Abort implementation
 
 Waiting for input...
 ```
 
-### Implementation Subagent Failure
+### Implementation Blocker
 
-When subagent reports blocker:
+When implementer subagent reports a blocker:
 
 ```
-⚠️ Implementation Blocked
+Implementation Blocked
 
 Phase: [N]
 Task: [X.Y] - [title]
@@ -299,20 +393,8 @@ Options:
 2. Modify approach (will note deviation from spec)
 3. Skip task (will note incomplete)
 4. Abort implementation
-```
 
-### External Failures
-
-Test failures, build errors, etc.:
-
-```
-⚠️ External Failure
-
-Type: [test failure / build error / etc.]
-Details: [error output]
-
-Attempting auto-fix...
-[If fix fails, surface to user]
+Waiting for input...
 ```
 
 ---
@@ -339,12 +421,13 @@ Gate: Tests pass, issues resolved before Phase 3.
 
 ## Principles
 
-- **Checkpoints are mandatory** - NEVER skip reviewer spawning. Every phase MUST have code review.
+- **Task dependencies enforce order** - Can't skip checkpoints, `blockedBy` prevents it
+- **Reviews loop until pass** - No limit on fix iterations for review issues
+- **Execution errors surface immediately** - User guides resolution
 - **Spec is source of truth** - Don't deviate without explicit approval
 - **Atomic commits** - Each commit is a logical unit
 - **Phase-level subagents** - One implementation subagent per phase (not per task)
 - **Parallel reviews** - Code and security reviews run simultaneously when both needed
-- **Fail fast, surface early** - Don't spin on unresolvable issues
 - **Clean state** - Always leave repo in buildable, testable state
 
 ---
@@ -352,11 +435,11 @@ Gate: Tests pass, issues resolved before Phase 3.
 ## Prompt Templates
 
 All subagent prompts are in this directory:
-- `./implementer-prompt.md` - Phase implementation
+- `./implementer-prompt.md` - Phase implementation (or review issue fixing)
 - `./code-reviewer-prompt.md` - Code quality and correctness review
 - `./security-reviewer-prompt.md` - Security-focused review
 
-These templates have variables that get substituted with actual values:
+Template variables:
 
 | Variable | Used by | Description |
 |----------|---------|-------------|
@@ -365,7 +448,7 @@ These templates have variables that get substituted with actual values:
 | `{PHASE_NAME}` | all | Current phase name |
 | `{IMPL_SPEC_PATH}` | all | Path to implementation spec |
 | `{DESIGN_SPEC_PATH}` | all | Path to design spec |
-| `{PHASE_TASKS}` | implementer, code-reviewer | Full text of phase tasks |
+| `{PHASE_TASKS}` | implementer, code-reviewer | Full text of phase tasks (or review issues to fix) |
 | `{BASE_SHA}` | reviewers | Git commit before phase |
 | `{HEAD_SHA}` | reviewers | Git commit after phase |
 | `{SECURITY_CONCERNS}` | security-reviewer | Why security review triggered |
@@ -378,7 +461,8 @@ These templates have variables that get substituted with actual values:
 |-------|---------------------|
 | Output | Completed implementation on topic branch |
 | Branch | `feature/[topic]` |
-| Implementation | One subagent per phase |
-| Code review | At every checkpoint |
+| Tasks per phase | 2 (Implement + Checkpoint) |
+| Code review | Always, at every checkpoint |
 | Security review | Only when `Security:` line present |
-| Escalation | After 3 failed resolution attempts |
+| Review fix loop | Unlimited iterations until PASS |
+| Escalation | On execution errors (not review issues) |
