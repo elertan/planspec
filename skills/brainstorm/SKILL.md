@@ -167,13 +167,32 @@ Sometimes the right answer is "don't build this." This can emerge at any phase.
    - What underlying problem they might be solving
    - What assumptions they (and you) are making
 
-2. **[Ask]** Confirm scope before deep discovery:
+2. **Validate the problem framing:**
+
+   **Fast exit:** If the request is clear, follows existing patterns, and has obvious intent — skip. Example: "Add icons like we do elsewhere" needs no validation.
+
+   Otherwise, as you understand the request, evaluate:
+
+   - **Right problem?** Is this the root issue, or a symptom of something deeper?
+     Example: "Page is slow" — is it the page, the data fetch, or the database query?
+
+   - **Right direction?** Does the proposed approach address the actual cause?
+     Example: "Add caching to speed up the page" — but if slowness is client-side rendering, caching won't help.
+
+   - **Evidence?** What suggests this is actually the problem?
+     Example: "Search is broken" — wrong results? Timing out? Errors? Each implies a different problem.
+
+   **If you see a concern** (wrong layer, unclear cause, missing evidence), surface it briefly: "Before we proceed — [concern]. Does that match what you're seeing?"
+
+   **If no concerns**, continue without comment. This is analysis, not a gate.
+
+3. **[Ask]** Confirm scope before deep discovery:
    - If scope is ambiguous (e.g., "add auth" could mean basic token check or full OAuth2+MFA), ask ONE clarifying question
    - Present 2-3 scope options: "Are you thinking [minimal], [moderate], or [comprehensive]?"
    - This prevents wasted discovery on the wrong scope
    - Skip if scope is already clear from context
 
-3. **Discover** the problem space:
+4. **Discover** the problem space:
 
    **Depth guidance:** Focus discovery on what's needed to assess viability. Don't exhaustively map everything—go deep only where uncertainty blocks decisions. You can always revisit later.
 
@@ -194,16 +213,16 @@ Sometimes the right answer is "don't build this." This can emerge at any phase.
       - **GAPS:** What's missing or blocking? (surface immediately)
       - **UNCERTAIN:** What couldn't be verified? (must be resolved, not deferred)
 
-4. If gaps/blockers found, surface to user immediately—may require pivoting
+5. If gaps/blockers found, surface to user immediately—may require pivoting
 
-5. **Resolve uncertainties** — For each UNCERTAIN item, ask user ONE at a time:
+6. **Resolve uncertainties** — For each UNCERTAIN item, ask user ONE at a time:
    - Can they provide the answer?
    - Should we investigate further? (propose how)
    - Do they want to explicitly skip/defer? (acknowledge risk)
 
    **Do not proceed with unresolved uncertainties.** Either resolve them or get explicit user acknowledgment to defer.
 
-6. Ask ONE additional clarifying question if needed (prefer multiple choice)
+7. Ask ONE additional clarifying question if needed (prefer multiple choice)
 
 ### Exit Criteria
 
@@ -223,25 +242,44 @@ Proceed to Phase 2 when:
 
 1. Draft success criteria based on Phase 1 understanding—trace what the user actually needs vs. what they asked for
 
-2. Identify **non-functional requirements** (as relevant):
+2. **Define acceptance criteria (when relevant):**
+
+   **Fast exit:** Simple UI changes, pattern-following work, or anything where "working correctly" is the only meaningful criterion — skip. Don't invent criteria for work that doesn't need them.
+
+   **Define criteria when:**
+   - Performance-sensitive: API endpoints, data processing, queries, rendering large datasets, file operations
+   - Reliability-sensitive: Network calls, external integrations, operations that can fail
+   - User experience: Responsiveness, loading states, error feedback
+
+   **When uncertain** whether criteria matter, ask:
+   "Are there performance or reliability expectations? For example, response time limits, load requirements, or failure handling?"
+
+   **Frame as testable assertions:**
+   - "API responds in < 200ms for typical payload"
+   - "Handles network timeout with user feedback"
+   - "Form validates before submission"
+
+   These become verification points during implementation.
+
+3. Identify **non-functional requirements** (as relevant):
    - Performance targets (latency, throughput, resource limits)
    - Availability/reliability expectations
    - Security requirements
    - Scalability needs (current vs. projected load)
    - Compatibility constraints (browsers, devices, integrations)
 
-3. Define **anti-goals** (what we're explicitly NOT building):
+4. Define **anti-goals** (what we're explicitly NOT building):
    - Features that seem adjacent but are out of scope
    - Quality attributes we're intentionally not optimizing for
    - This prevents scope creep and clarifies tradeoff decisions later
 
-4. Surface **constraints**:
+5. Surface **constraints**:
    - Tech stack restrictions (must use X, cannot use Y)
    - Timeline pressures (if any)
    - Team capacity/expertise limitations
    - Budget or resource limits
 
-5. Present to user for validation:
+6. Present to user for validation:
    ```
    "Based on our discussion, success means:
 
@@ -261,12 +299,13 @@ Proceed to Phase 2 when:
    Does this capture what you need?"
    ```
 
-6. Refine until user confirms—question whether refinements actually improve or just add complexity
+7. Refine until user confirms—question whether refinements actually improve or just add complexity
 
 ### Exit Criteria
 
 User has confirmed:
 - Success criteria (what we're building)
+- Acceptance criteria (if applicable — testable verification points)
 - Non-functional requirements (how well it must work)
 - Anti-goals (what we're NOT building)
 - Constraints acknowledged
@@ -345,11 +384,55 @@ User has confirmed:
 
 6. Discuss until approach is selected—if user raises new considerations, trace them through the analysis
 
+7. **Assess risks and unknowns:**
+
+   **Fast exit:** If the approach uses established patterns, familiar tools, and no unverified dependencies — skip. Don't manufacture risks.
+
+   Otherwise, think through:
+
+   - **Assumptions:** What is this approach assuming? Which are verified vs believed?
+   - **Unknowns:** What are we relying on but haven't confirmed? API behavior, library capabilities, integration points, performance characteristics.
+   - **Failure modes:** What could go wrong that we haven't accounted for?
+
+   **If you identify material risks**, surface them:
+
+   "This approach assumes [X]. If that doesn't hold, [consequence]."
+
+   Then assess: **Would failure invalidate the approach, or is it recoverable?**
+
+   - **Invalidating:** The whole approach fails if the assumption is wrong
+   - **Recoverable:** We can adapt or fall back without major rework
+
+   **For invalidating risks**, offer the user a choice:
+
+   "We could validate this before continuing:
+   A) Test now — pause design, validate [specific unknown], then continue
+   B) Test first in implementation — include validation as the first task
+   C) Skip — proceed without validation, adapt if needed
+
+   What would you prefer?"
+
+   **If user chooses A (test now):**
+   1. Propose what to test: what specifically we're validating
+   2. Explain why this test gives a clear signal: what a positive/negative result means
+   3. Let user confirm the test approach
+   4. Execute (this pauses brainstorming)
+   5. Report findings
+   6. Resume: validated → continue to Phase 4; invalidated → revisit Phase 3
+
+   **If user chooses B (test first in implementation):**
+   1. Propose what to test: what specifically we're validating
+   2. Explain why this test gives a clear signal: what a positive/negative result means
+   3. Note in the spec under Risks: "Validate [X] before full implementation. If invalid, revisit approach."
+
+   **For recoverable risks**, note them in the spec but don't gate on validation.
+
 ### Exit Criteria
 
 - User has confirmed the approach to pursue
 - Constraints and required mitigations are acknowledged
 - Scope limitations (if any) are understood
+- Material risks surfaced and validation approach agreed (if applicable)
 
 ---
 
@@ -420,6 +503,14 @@ impl-spec: planspec:impl-spec
 
 **Not building:**
 - [anti-goals]
+
+## Acceptance Criteria
+
+[Skip if not applicable — only include for performance/reliability-sensitive work]
+
+| Criterion | Measurement | Threshold |
+|-----------|-------------|-----------|
+| [what we're verifying] | [how to verify] | [pass/fail line] |
 
 ## Approach
 
@@ -514,8 +605,8 @@ If present, note why deferred and what risk was acknowledged.]
 | Phase | Goal | Exit When |
 |-------|------|-----------|
 | 0. Feasibility | Quick viability check | User has answer, or decides to proceed/not proceed |
-| 1. Understand | Know the WHY + verify constraints | Approach viable, blockers surfaced, uncertainties resolved |
-| 2. Success | Define done + boundaries | User confirms criteria, NFRs, anti-goals, constraints |
-| 3. Explore | Assess approaches, present options | User selects approach, constraints acknowledged |
+| 1. Understand | Know the WHY + verify constraints | Problem validated, approach viable, blockers surfaced, uncertainties resolved |
+| 2. Success | Define done + boundaries | User confirms criteria, acceptance criteria (if applicable), NFRs, anti-goals, constraints |
+| 3. Explore | Assess approaches, present options | User selects approach, risks assessed, validation approach agreed |
 | 4. Design | Validate implementation-ready detail | All sections confirmed with enough detail to implement |
 | 5. Spec | Document | File committed, ready for implementation spec |
