@@ -193,6 +193,7 @@ For each phase in order:
 
    ```
    Task(
+     subagent_type: "general-purpose",
      description: "Implement Phase [N]: [phase name]",
      prompt: [constructed from template]
    )
@@ -248,6 +249,7 @@ For each phase in order:
 
      # Spawn implementer to fix issues
      Task(
+       subagent_type: "general-purpose",
        description: "Fix review issues for Phase [N]",
        prompt: implementer-prompt.md with:
          {PHASE_TASKS} = "Fix the following review issues:\n\n" + [formatted issues]
@@ -330,6 +332,7 @@ Read `./code-reviewer-prompt.md`, substitute variables:
 
 ```
 Task(
+  subagent_type: "general-purpose",
   description: "Code review Phase [N]",
   prompt: [constructed from template]
 )
@@ -345,6 +348,7 @@ Read `./security-reviewer-prompt.md`, substitute variables:
 
 ```
 Task(
+  subagent_type: "general-purpose",
   description: "Security review Phase [N]",
   prompt: [constructed from template]
 )
