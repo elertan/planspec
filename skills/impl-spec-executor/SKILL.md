@@ -163,7 +163,7 @@ Before any work, create the full task graph for visibility and enforcement.
 
 6. **Update impl-spec status:**
    - Change `status: ready` → `status: in-progress`
-   - Commit: `chore([topic]): start implementation`
+   - (No commit - status tracked via task system)
 
 7. **Mark completed:**
    - `TaskUpdate(INIT_ID, status: completed)`
@@ -297,7 +297,7 @@ For each phase in order:
 4. **Update impl-spec:**
    - Change `status: in-progress` → `status: completed`
    - Add completion date
-   - Commit: `docs([topic]): mark implementation complete`
+   - (No commit - can be included in PR or squashed)
 
 5. **Report summary:**
 

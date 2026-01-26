@@ -30,6 +30,8 @@ Creates `planspec/implementations/[topic].md` with:
 - Review checkpoints
 - Security review gates (where applicable)
 
+The spec is reviewed against code reviewer criteria before finalization to catch issues that would be flagged during implementation.
+
 ---
 
 ## Process
@@ -245,12 +247,64 @@ Gate: Tests pass, issues resolved before Phase 3.
   - [ ] [Criterion 2]
 ```
 
-### Step 7: Output Summary
+### Step 7: Review Loop
 
-After writing the file:
+Before finalizing, review the spec to catch issues that would be flagged during code review.
+
+1. **Spawn spec reviewer subagent:**
+
+   Read `./spec-reviewer-prompt.md`, substitute variables:
+   - `{IMPL_SPEC_PATH}` - path to the implementation spec just written
+   - `{DESIGN_SPEC_PATH}` - path to the design spec
+   - `{CODE_REVIEWER_PATH}` - `../impl-spec-executor/code-reviewer-prompt.md`
+   - `{IMPL_SPEC_FILENAME}` - filename of the implementation spec
+
+   ```
+   Task(
+     subagent_type: "general-purpose",
+     description: "Review impl-spec before finalization",
+     prompt: [constructed from template]
+   )
+   ```
+
+2. **Handle review result:**
+
+   ```
+   IF verdict == "PASS":
+     proceed to Step 8
+
+   IF verdict == "PASS WITH FIXES" or "FAIL":
+     # Patch the impl-spec based on findings
+     For each blocking/should-fix issue:
+       - Update the specific task description
+       - Add missing tasks if needed
+       - Clarify vague requirements
+
+     # Re-run review
+     Go back to step 7.1
+   ```
+
+3. **Patch strategy:**
+
+   - Edit specific tasks rather than regenerating entire spec
+   - For "Task X.Y needs error handling specified" → add error handling to that task's requirements
+   - For "Missing task for edge case X" → add new task to appropriate phase
+   - For "O(n²) approach described" → update task to specify efficient approach
+
+4. **Loop limit:**
+
+   - Maximum 3 iterations
+   - If still failing after 3, output spec with remaining issues noted
+   - User can decide to proceed or manually refine
+
+### Step 8: Output Summary
+
+After review passes:
 
 ```
 Implementation spec created: planspec/implementations/[topic].md
+
+Review: PASSED (N iterations)
 
 Summary:
 - Phases: [N]
@@ -274,6 +328,7 @@ Ready to execute with: planspec:impl-spec-executor planspec/implementations/[top
 - **Concrete paths:** Use real file paths from codebase analysis
 - **Meaningful tests:** Only where they verify correctness, not for coverage theater
 - **Review gates:** Prevent forward progress with broken/insecure code
+- **Shift left:** Catch code review issues at spec stage, not during implementation
 
 ---
 
@@ -285,4 +340,10 @@ Ready to execute with: planspec:impl-spec-executor planspec/implementations/[top
 | Phases | Logical groupings with review gates |
 | Tasks | Mid-level granularity, verifiable |
 | Tests | Per-phase, meaningful edge cases |
+| Spec review | Before finalization, up to 3 iterations |
 | Reviews | Code review at every checkpoint, security review where `Security:` specified |
+
+## Prompt Templates
+
+Subagent prompts in this directory:
+- `./spec-reviewer-prompt.md` - Reviews impl-spec against code reviewer criteria before finalization
